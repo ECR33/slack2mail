@@ -1,7 +1,7 @@
 services:
   app:
     # build: .
-    image: ghcr.io/ECR33/slack2mail
+    image: ghcr.io/ecr33/slack2mail
     logging:
       driver: "json-file"
       options:
