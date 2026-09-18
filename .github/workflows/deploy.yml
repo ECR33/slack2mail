@@ -58,7 +58,7 @@ jobs:
           USERNAME: ${{ secrets.USERNAME }}
         run: |
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
-            cd /path/to/your/app
+            cd /home/ubuntu/slack2mail
 
             # 最新のイメージをプルしてコンテナを更新
             docker compose pull
