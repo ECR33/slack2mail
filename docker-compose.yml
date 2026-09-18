@@ -1,5 +1,6 @@
 services:
   app:
+    # build: .
     image: slack2mail-app:latest
     logging:
       driver: "json-file"

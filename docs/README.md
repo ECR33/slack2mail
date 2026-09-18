@@ -189,8 +189,8 @@ jobs:
 
 #### OCI
 
-1. GitHub Actions用のSSH鍵を準備する:
-  事前準備。
+1. GitHub Actions用のSSH鍵を準備する:  
+  事前準備。  
   本番環境の仮想マシンにパスワードなしでSSH接続できるよう、専用のSSH鍵ペア（秘密鍵と公開鍵）を作成または既存のものを利用できるようにします。
 - 検証方法: 手元の端末（または後述の設定）から、そのSSH鍵を使って仮想マシンにログインできることを確認します。
 
@@ -204,8 +204,8 @@ jobs:
         - SSH_PRIVATE_KEY: 仮想マシンにアクセスするための秘密鍵の中身
     4. 検証方法: 登録したシークレット名がリストに正しく表示されていることを確認する。
 
-3. デプロイ用スクリプトを仮想マシン側に用意する:
-  仮想マシン側の設定。
+3. デプロイ用スクリプトを仮想マシン側に用意する:  
+  仮想マシン側の設定。  
   本番環境のプロジェクトディレクトリ（例: /home/user/app）に移動し、Docker Composeを安全に更新できる状態にしておきます。
     - あらかじめ仮想マシン側で一度リポジトリをクローンし、環境変数ファイル（.env）などを配置しておいてください。
     - 検証方法: 仮想マシン上で手動で git pull と docker compose up -d --build を実行し、問題なくアプリが起動することを確認する。
@@ -213,6 +213,10 @@ jobs:
 4. GitHub Actionsのワークフローファイルを作成する:
   GitHubの設定。
   リポジトリのルートに .github/workflows/deploy.yml というファイルを作成し、以下の内容を記述します。
+
+##### 仮想マシンでbuildするパターン
+
+リポジトリのルートに .github/workflows/deploy.yml というファイルを作成し、以下の内容を記述します。
 
 ```
 name: Deploy to Production
@@ -252,9 +256,112 @@ jobs:
           EOF
 ```
 
+##### githubでbuildするパターン
+
+1. GitHub Packagesへのプッシュ権限を設定する:  
+  GitHub ActionsからGHCRへイメージを書き込めるようにするため、リポジトリの権限を確認します。
+    1. リポジトリの Settings ＞ Actions ＞ General を開く。
+    2. ページ下部の Workflow permissions で、Read and write permissions にチェックを入れて保存する。
+    - 検証方法: 権限設定が保存されていることを確認する。
+
+2. 仮想マシンからGHCRへログインできるようにする:  
+  仮想マシン側の設定。  
+  プライベートリポジトリを使用する場合や、パブリックでもダウンロード時に認証を行うため、仮想マシン側で一度だけログイン設定を行います。
+      1. GitHubでアクセストークン（Personal Access Token: read:packages 権限が付与されたもの）を作成する。
+      2. 仮想マシンにSSHログインし、以下のコマンドでログインする。
+      ```
+      echo "YOUR_PAT_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+      ```
+      - 検証方法: ログイン成功メッセージ（Login Succeeded）が表示されることを確認する。
+
+3. ビルドとデプロイのワークフローを作成する
+
+
+.github/workflows/deploy.yml
+
+```
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to Remote Server
+        env:
+          HOST: ${{ secrets.HOST }}
+          USERNAME: ${{ secrets.USERNAME }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
+            cd /path/to/your/app
+
+            # 最新のイメージをプルしてコンテナを更新
+            docker compose pull
+            docker compose up -d
+          EOF
+```
+
+docker-compose.yml例
+```
+services:
+  app:
+    image: ghcr.io/your-github-username/your-repo-name:latest
+    ports:
+      - "80:80"
+    environment:
+      - KEY=VALUE
+```
+
 検証方法: ファイルを main ブランチにプッシュし、GitHubの「Actions」タブでワークフローがエラーなく緑色（成功）になることを確認する。
 
-> セキュリティに関する注意点
+> セキュリティに関する注意点  
 SSHのホスト鍵確認をスキップする設定（StrictHostKeyChecking=no）を使用しています。よりセキュアな環境を目指す場合は、known_hosts にホストのフィンガープリントを登録するアクション（例: appleboy/ssh-action など）の利用を検討してください。
 
 ### GitHub環境変数
