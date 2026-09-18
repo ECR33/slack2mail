@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env.preproduction
+    expose:
+      - "3000"
+    # ポートをhostにpublishする必要はない(cloudflaredが同一ネットワーク経由で叩く)
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    env_file:
+      - .env.preproduction
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - app
+
+# 仮想マシンへのイメージ作成用
+#
+# イメージ作成
+# docker compose -f docker-compose.preproduction.yml build
+#
+# イメージをエクスポート
+# docker save -o slack2mail.tar slack2mail-app:latest
+#
+# 稼働用仮想マシンでインポート
+# docker load -i slack2mail.tar
+#
+# 起動(docker-compose.yml使用)
+# docker compose up -d
+#

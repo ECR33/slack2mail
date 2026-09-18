@@ -1,0 +1,9 @@
+node_modules
+.output
+.nuxt
+.git
+.wrangler
+coverage
+db_src
+supabase/.branches
+supabase/.temp

@@ -1,0 +1,45 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Test coverage
+coverage/
+
+# Playwright
+playwright-report/
+test-results/
+
+db_src/
+slack-manifest.*
+manifest.slack.*
+
+docs_bk/
+.nuxtrc
+.wrangler
+schema.sql
+*.tar
+
+/supabase/snippets/*
+
+.devcontainer
