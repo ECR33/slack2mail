@@ -59,6 +59,9 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
             cd /home/ubuntu/slack2mail
+            # docker-compose.ymlが変更される可能性があるため現在のdocker-compose.ymlで停止する
+            docker compose stop
+            git pull origin master
 
             # 最新のイメージをプルしてコンテナを更新
             docker compose pull
