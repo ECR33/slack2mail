@@ -512,6 +512,7 @@ export const getWaitingEmails = async (email: Email, limit: number, supabase: Su
 /**
  * 送信中状態で時間がたったもの(おそらく送信エラー)を抽出する。
  * 送信中(sending)のまま(sending_at)から15分たったものを抽出対象とする。
+ * IMAP Client作成/connect中にエラーとなった場合はsending_atはnull
  * 100件ずつ抽出する
  * @param email 
  * @param limit 
@@ -519,11 +520,12 @@ export const getWaitingEmails = async (email: Email, limit: number, supabase: Su
  * @returns 
  */
 export const getTimeoutEmails = async (email: Email, limit: number, supabase: SupabaseClient): Promise<SentEmail[]> => {
+    const fifteenMinutesAgo = DateTime.now().minus({ minutes: 15 }).toISO();
     const { data, error } = await supabase.from('sent_emails').select()
         .eq('email_id', email.email_id)
         .eq('tenant_id', email.tenant_id)
         .eq('status', 'sending')
-        .lte('sending_at', DateTime.now().plus({ minutes: -15 }))
+        .or(`sending_at.lte.${fifteenMinutesAgo},sending_at.is.null`)
         .limit(limit)
     if (error) {
         throw error
