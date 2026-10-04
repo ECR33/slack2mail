@@ -26,6 +26,14 @@ export default defineTask({
         const supabaseServiceRole = process.env.NUXT_SUPABASE_SERVICE_ROLE ?? ""
         const supabase = createClient<Database>(supabaseProjectUrl, supabaseServiceRole)
 
+        let limit = 0
+        limit = parseInt(process.env.LIMIT || "") // 取得件数
+        if (isNaN(limit)) {
+            console.warn('LIMIT: invalid value', process.env.LIMIT)
+            limit = 10
+            console.info('LIMIT: set default', limit)
+        }
+
         const ret = await getEmails(supabase)
         if (!ret.result || !ret.emails) {
             console.info(ret.message, DateTime.now().toFormat('yyyy-MM-dd HH:mm'))
@@ -45,11 +53,13 @@ export default defineTask({
             }
 
             try {
+                let num_of_target = email.num_of_target // 従来はemail.num_of_targetで判定していたが、expandすると値が変わるため
                 // email 展開
                 // approvedのemailをsent_emailsへ展開する
                 // approved -> expanded (rpc内で遷移。失敗すると展開もステータス変更もrollbackする。)
                 const expanded = await expandEmailTargets(email, supabase)
                 if (expanded.shouldProcess) {
+                    num_of_target = expanded.targetLength
                     console.info('emailが展開されました。', email.email_id, expanded.targetLength, DateTime.now().toFormat('yyyy-MM-dd HH:mm'))
                 } else {
                     console.info('展開すべきemailはありませんでした。', DateTime.now().toFormat('yyyy-MM-dd HH:mm'))
@@ -57,9 +67,12 @@ export default defineTask({
                 // 展開済みメールを送信する
                 let targets
                 try {
-                    targets = await getWaitingEmails(email, supabase) as SentEmail[]
+                    console.info('展開済みメール取得 limit', limit)
+                    targets = await getWaitingEmails(email, limit, supabase) as SentEmail[]
                     if (targets.length == 0) {
-                        targets = await getTimeoutEmails(email, supabase) as SentEmail[]
+                        console.info('getWaitingEmails', targets.length)
+                        targets = await getTimeoutEmails(email, limit, supabase) as SentEmail[]
+                        console.info('getTimeoutEmails executed', targets.length)
                     }
                 } catch (error) {
                     console.error('getWaitingEmails 失敗', error)
@@ -161,7 +174,8 @@ export default defineTask({
                     // 送信後にステータス変更(emailsテーブルへ送信済みを記録)
                     const count = await getNumberOfSent(email.email_id, supabase)
                     let statusData
-                    if (count == email.num_of_target) {
+                    console.info('num_of_target', count, num_of_target)
+                    if (count == num_of_target) {
                         // すべて送信できた
                         statusData = await updateEmail({
                             email_id: email.email_id,
@@ -170,7 +184,8 @@ export default defineTask({
                             sent_at: DateTime.now().toISO(),
                             num_of_sent: count,
                         }, supabase)
-                    } else if (count > (email.num_of_target ?? 0)) {
+                        console.info('status changed', statusData.email_id, statusData.status)
+                    } else if (count > (num_of_target ?? 0)) {
                         // なにかおかしい
                         console.error('送信数が送信予定数を上回っています。', email.email_id, count, email.num_of_target)
                         statusData = await updateEmail({

@@ -887,7 +887,7 @@ const createSentMessage = (email: Email) => {
         type: "section",
         text: {
             type: "plain_text",
-            text: `:incoming_envelope:メールは送信されました\n送信時刻: ${dateStr}\n受信確認数: ${email.num_of_received}/${email.num_of_sent}`,
+            text: `:incoming_envelope:メールは送信されました\n送信時刻: ${dateStr}\n受信確認数: ${email.num_of_received}/${email.num_of_sent}/${email.num_of_target}`,
             emoji: true,
         }
     }

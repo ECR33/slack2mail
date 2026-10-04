@@ -158,7 +158,7 @@ export const getNumberOfSent = async (email_id: string, supabase: SupabaseClient
         console.error('getNumberOfSent: 送信済みメール数の取得に失敗しました', error.message)
         throw error
     }
-    return count
+    return count ?? 0
 }
 
 /**
@@ -494,13 +494,15 @@ export const expandEmailTargets = async (email: Email, supabase: SupabaseClient)
 /**
  * 指定されたemailの送信待ちデータ(sent_emails)を取得する
  * @param email 
+ * @param limit 
  * @param supabase 
  * @returns 
  */
-export const getWaitingEmails = async (email: Email, supabase: SupabaseClient): Promise<SentEmail[]> => {
+export const getWaitingEmails = async (email: Email, limit: number, supabase: SupabaseClient): Promise<SentEmail[]> => {
     const { data: claimedTargets, error: claimError } = await supabase.rpc('claim_pending_sent_targets', {
         p_tenant_id: email.tenant_id,
         p_email_id: email.email_id,
+        p_limit: limit
     })
     if (claimError) throw claimError
 
@@ -512,16 +514,17 @@ export const getWaitingEmails = async (email: Email, supabase: SupabaseClient): 
  * 送信中(sending)のまま(sending_at)から15分たったものを抽出対象とする。
  * 100件ずつ抽出する
  * @param email 
+ * @param limit 
  * @param supabase 
  * @returns 
  */
-export const getTimeoutEmails = async (email: Email, supabase: SupabaseClient): Promise<SentEmail[]> => {
+export const getTimeoutEmails = async (email: Email, limit: number, supabase: SupabaseClient): Promise<SentEmail[]> => {
     const { data, error } = await supabase.from('sent_emails').select()
         .eq('email_id', email.email_id)
         .eq('tenant_id', email.tenant_id)
         .eq('status', 'sending')
         .lte('sending_at', DateTime.now().plus({ minutes: -15 }))
-        .limit(100)
+        .limit(limit)
     if (error) {
         throw error
     }
