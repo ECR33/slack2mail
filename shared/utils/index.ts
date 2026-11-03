@@ -251,7 +251,7 @@ export const readEvent = async (eventConfig: EventConfig, googleSpreadsheetClien
     if (!eventConfig.sheet_id || !eventConfig.header) {
         throw new Error('readEvent: eventConfigが正しくありませんでした')
     }
-    const response = await googleSpreadsheetClient.spreadsheets.values.get({ spreadsheetId: eventConfig.sheet_id, range: `${eventConfig.sheet_name}!A:Z` })
+    const response = await googleSpreadsheetClient.spreadsheets.values.get({ spreadsheetId: eventConfig.sheet_id, range: `${eventConfig.sheet_name}!A:AZ` })
     if (response.data.values) {
         const sheetobj = sh2json(response.data.values, eventConfig.header)
         return readEventFromJson(sheetobj, eventConfig)
