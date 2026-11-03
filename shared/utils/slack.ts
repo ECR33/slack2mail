@@ -386,10 +386,10 @@ const getMultiSelectBlocks = (receipientGroupMenuDatas: ReceipientGroupMenuData[
             return {
                 text: {
                     type: "plain_text",
-                    text: String(m),
+                    text: String(m) || "-",
                     emoji: true
                 },
-                value: String(m)
+                value: String(m) || "-"
             }
         })
         if (options.length > 100) {
@@ -949,6 +949,43 @@ const createMailMessage = (email: Email) => {
 }
 
 /**
+ * メール件名・本文(折りたたみ型)
+ * @param email 
+ * @returns 
+ */
+const createCollapsibleMailMessage = (email: Email) => {
+    return {
+        "type": "container",
+        "block_id": "body",
+        "title": {
+            "type": "plain_text",
+            "text": `✉️${email.subject}`,
+            "emoji": false
+        },
+        "is_collapsible": true,
+        "default_collapsed": true,
+        "child_blocks": [
+            {
+                "type": "rich_text",
+                "block_id": "rt-simple",
+                "elements": [
+                    {
+                        "type": "rich_text_preformatted",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": email.body
+                            }
+
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+
+/**
  * 送信対象のイベント名
  * @param email 
  * @returns 
@@ -1006,7 +1043,8 @@ export const getSlackChatMessage = (email: Email) => {
 
     const blocks = []
     blocks.push(createMailTitle(email))
-    blocks.push(createMailMessage(email))
+    // blocks.push(createMailMessage(email))
+    blocks.push(createCollapsibleMailMessage(email))
     blocks.push(createEventNameMessage(email))
     const receipients = createReceipientsField(email)
     if (receipients) {

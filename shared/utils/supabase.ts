@@ -119,7 +119,7 @@ export const getEmbededVarNames = async (tenantId: string, eventName: string, su
         console.error('getEmbededVarNames error', error.message)
         throw new Error(`getEmbededVarNames: 埋込みマーカー名を取得できませんでした: ${error.message}`)
     }
-    console.log('embeded_columns', data?.embeded_columns)
+    // console.log('embeded_columns', data?.embeded_columns)
     return data?.embeded_columns
 }
 
@@ -166,6 +166,20 @@ export const saveEmail = async (email: EmailInsert, supabase: SupabaseClient): P
     const { data, error } = await supabase.from('emails').upsert(email, { onConflict: 'email_id' }).select().single()
     if (error) {
         console.error('saveEmail error', error.message)
+    }
+    return data
+}
+
+/**
+ * email一覧を取得する
+ * @param tenantId
+ * @param supabase 
+ * @returns 
+ */
+export const getEmails2 = async (tenantId: string, supabase: SupabaseClient) => {
+    const { data, error } = await supabase.from('emails').select().eq('tenant_id', tenantId)
+    if (error) {
+        console.error('getEmails error', error.message)
     }
     return data
 }

@@ -495,6 +495,12 @@
     </v-stepper-vertical>
     <v-btn v-if="finished" text="Reset" variant="plain" @click="finished = false"></v-btn>
 
+    <v-row class="mt-4">
+        <v-col cols="12">メンテナンス ツール</v-col>
+    </v-row>
+    <v-row class="mt-2">
+        <v-col cols="auto"><v-btn @click="repost">メッセージ再投稿</v-btn></v-col>
+    </v-row>
 
 </template>
 <script setup lang="ts">
@@ -951,6 +957,14 @@ const updateBrand = async () => {
     }
 }
 
+// メッセージ再投稿
+// 再投稿することによりSlack上の表示形式を新しい形式に変更する
+
+const repost = async () => {
+    // 投稿されたメッゼーじを折りたたみ型のメッセージとして再投稿する
+    const result = await $fetch('/api/repost', { method: 'POST', body: { tenantId: tenantId } })
+    console.info('result', result)
+}
 
 //
 

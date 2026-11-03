@@ -14,6 +14,7 @@ import type { Database } from '~/types/database.types'
 import { EmailInsert } from '~~/shared/types'
 
 export default defineEventHandler(async (event) => {
+    console.info('slack2mail webhook start')
     const headers = getRequestHeaders(event)
     const rawBody = await readRawBody(event, false)
     if (rawBody == undefined) {
@@ -234,6 +235,7 @@ export default defineEventHandler(async (event) => {
                 }
                 const db_email = await saveEmail(mail, supabase)
                 const content = getSlackChatMessage(db_email)
+                console.info('content', JSON.stringify(content,null,2))
                 if (db_email.approval_thread_ts) {
                     // 修正
                     const result = await web.chat.update(content)
@@ -288,8 +290,8 @@ export default defineEventHandler(async (event) => {
             }
         } catch (error) {
             console.error('slack2mail: Interactiviey error', error)
-            console.error('payload', JSON.stringify(payload, null, 2))
-            console.error('view', JSON.stringify(view, null, 2))
+            // console.error('payload', JSON.stringify(payload, null, 2))
+            // console.error('view', JSON.stringify(view, null, 2))
             throw createError({
                 statusCode: 500,
                 message: `Slack Modal失敗: ${error}`
