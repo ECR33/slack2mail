@@ -52,6 +52,7 @@ export type Database = {
           email_id: string
           event_filter: Json | null
           event_name: string | null
+          filter_mode: string
           mail_account_id: string | null
           mail_account_name: string | null
           num_of_received: number | null
@@ -81,6 +82,7 @@ export type Database = {
           email_id: string
           event_filter?: Json | null
           event_name?: string | null
+          filter_mode?: string | null
           mail_account_id?: string | null
           mail_account_name?: string | null
           num_of_received?: number | null
@@ -110,6 +112,7 @@ export type Database = {
           email_id?: string
           event_filter?: Json | null
           event_name?: string | null
+          filter_mode?: string | null
           mail_account_id?: string | null
           mail_account_name?: string | null
           num_of_received?: number | null
@@ -666,6 +669,7 @@ export type Database = {
           p_email_id: string
           p_event_name: string
           p_filter?: Json
+          p_filter_mode?: string
           p_tenant_id: string
         }
         Returns: Json
@@ -693,9 +697,30 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      count_email_targets: {
+        Args: {
+          p_event_name: string
+          p_filter?: Json
+          p_filter_mode?: string
+          p_tenant_id: string
+        }
+        Returns: number
+      }
       delete_tenant_google_credential: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      get_sample_event_target: {
+        Args: {
+          p_event_name: string
+          p_filter?: Json
+          p_filter_mode?: string
+          p_tenant_id: string
+        }
+        Returns: {
+          email_addr: string
+          embeded_values: Json
+        }[]
       }
       get_event_filters: {
         Args: {

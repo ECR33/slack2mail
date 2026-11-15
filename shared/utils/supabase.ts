@@ -157,6 +157,30 @@ export const getReceipientGroupValues = async (eventName: string, eventFilterNam
 }
 
 /**
+ * 指定条件での送信対象件数(distinct email_addr)を取得する
+ * 展開・claimは行わない。claim_and_expand_email_targetsと同じ条件式。
+ * @param tenantId
+ * @param eventName イベント名
+ * @param filter [{column_name, column_value}] 配列
+ * @param filterMode 'and' | 'or' カラム間の結合条件
+ * @param supabase service_role client
+ * @returns 件数
+ */
+export const getTargetCount = async (tenantId: string, eventName: string, filter: any, filterMode: string, supabase: SupabaseClient): Promise<number> => {
+    const { data, error } = await supabase.rpc('count_email_targets', {
+        p_tenant_id: tenantId,
+        p_event_name: eventName,
+        p_filter: filter,
+        p_filter_mode: filterMode ?? 'and'
+    })
+    if (error) {
+        console.error('getTargetCount error', error.message)
+        throw new Error(`getTargetCount: 送信対象件数の取得できませんでした: ${error.message}`)
+    }
+    return data as number
+}
+
+/**
  * emailをupsertする
  * @param email 
  * @param supabase 
@@ -429,23 +453,28 @@ export const getTenantInfoByTenantId = async (tenantId: string, supabase: Supaba
 }
 
 /**
- * イベントから例として1レコード取得する
+ * イベントから検索条件に一致する例として1レコード取得する
+ * (件名・本文プレビュー用。RPC get_sample_event_target: AND/OR条件・属性欠落不一致扱い)
  * 
  * @param tenantId 
  * @param eventName 
+ * @param filter event_filter形式 [{column_name, column_value}, ...] (null/空配列で全レコード)
+ * @param filterMode 'and' | 'or'
  * @param supabase 
- * @returns 
+ * @returns {email_addr, embeded_values} または 該当なしならnull
  */
-export const getSampleEventData = async (tenantId: string, eventName: string, supabase: SupabaseClient) => {
-    const { data, error } = await supabase.from('event_data').select('embeded_values')
-        .eq('tenant_id', tenantId)
-        .eq('event_name', eventName)
-        .limit(1).maybeSingle()
+export const getSampleEventData = async (tenantId: string, eventName: string, filter: any, filterMode: string, supabase: SupabaseClient) => {
+    const { data, error } = await supabase.rpc('get_sample_event_target', {
+        p_tenant_id: tenantId,
+        p_event_name: eventName,
+        p_filter: filter ?? null,
+        p_filter_mode: filterMode ?? 'and'
+    })
     if (error) {
         console.error('getSampleEventData: error', error.message)
         throw new Error(`getSampleEventData: ${error.message}`)
     }
-    return data
+    return data?.[0] ?? null
 }
 
 /**

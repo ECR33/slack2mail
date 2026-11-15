@@ -76,7 +76,7 @@ const createEmailId = () => {
  * @param values payload.view.state.values
  * @returns EventFilter型の配列 [{ column_name: "年", column_value: "1年" }] (event_nameは含まれない)
  */
-const getEvetnFilter = (values: any) => {
+export const getEvetnFilter = (values: any) => {
     // const keys: string[] = Object.keys(values).filter(f => (f.includes('ex_select_')))
     const keys: string[] = Object.keys(values).filter(f => (f.includes('select_')))
     const eventFilters: EventFilter[] = []
@@ -118,6 +118,8 @@ export const getSlackViewValues = (payloadStr: string | any, _email: Email | nul
         body: values.body.input_action.value ?? "",
         event_name: values.event_name.select_action.selected_option.value ?? "",
         event_filter: getEvetnFilter(values),
+        // 宛先グループカラム間の結合条件。blockがない(宛先グループなし)場合は 'and' 既定
+        filter_mode: values.filter_mode?.select_action?.selected_option?.value ?? _email?.filter_mode ?? "and",
         status: "pending",
         approval_count: 0,
         approval_border: parseInt(values.approve_count.select_action.selected_option.value),
@@ -538,6 +540,32 @@ const getDatetimePicker = (schedule: number | null) => {
 }
 
 /**
+ * 宛先グループカラム間の結合条件
+ * - and: すべての条件に一致(交差)。カラム内の複数選択値はOR
+ * - or : いずれかの条件に一致(union)。カラム内の複数選択値はOR
+ */
+export type FilterMode = 'and' | 'or'
+
+/**
+ * FilterMode の選択肢(モーダル表示用)
+ */
+const filter_mode_options: Option[] = [
+    { name: "すべての条件に一致 (AND)", value: "and" },
+    { name: "いずれかの条件に一致 (OR)", value: "or" },
+]
+
+/**
+ * 宛先条件の表示テキスト(Slack投稿用)
+ * @param filter_mode
+ * @returns
+ */
+const filterModeLabel = (filter_mode: string | null | undefined): string => {
+    return filter_mode === "or"
+        ? "いずれかの条件に一致 (OR)"
+        : "すべての条件に一致 (AND)"
+}
+
+/**
  * slack2mailのモーダルに表示する基本的な部品
  * @param event_names ["event1", "event2"]
  * @param selected_event_name 選択したイベント
@@ -546,9 +574,10 @@ const getDatetimePicker = (schedule: number | null) => {
  * @param email データベース上の値。すでに登録済みの情報を編集する際に指定する
  * @param schedule_mode 送信日時モード
  * @param schedule 送信日時 10桁UNIXタイムスタンプ
+ * @param filter_mode 宛先グループカラム間の結合条件(再描画時の初期値)。未指定ならemailの値または'and'
  * @returns block kit 形式
  */
-export const createBlocks = (event_names: string[], selected_event_name: string | null = null, receipient_groups: ReceipientGroupMenuData[] | null = null, embeded_var_names: EmbededVarNames | null = null, email: Email | null = null, schedule_mode: boolean = false, schedule: number | null) => {
+export const createBlocks = (event_names: string[], selected_event_name: string | null = null, receipient_groups: ReceipientGroupMenuData[] | null = null, embeded_var_names: EmbededVarNames | null = null, email: Email | null = null, schedule_mode: boolean = false, schedule: number | null, filter_mode: FilterMode | null = null) => {
     const blocks = []
     blocks.push(getTextBlock("subject", "件名", false, email?.subject ?? null))
     blocks.push(getTextBlock("body", "本文", true, email?.body ?? null))
@@ -559,11 +588,15 @@ export const createBlocks = (event_names: string[], selected_event_name: string 
             return `((( ${m} )))`
         }).join(' , ')))
     }
-    if (receipient_groups) {
+    if (receipient_groups && receipient_groups.length > 0) {
+        // 宛先選択条件(AND/OR)は宛先グループ選択の直前に表示する
+        blocks.push(getSelectBlock("filter_mode", "宛先選択条件", filter_mode_options, false, email?.filter_mode ?? filter_mode ?? "and"))
         const multi_select = getMultiSelectBlocks(receipient_groups, email)
         multi_select?.map(m => {
             blocks.push(m)
         })
+        // 現在の条件での送信対象件数をプレビュー表示する(展開・claimしない)
+        blocks.push(getPreviewButton("count_targets", "現在の送信対象件数を表示", "件数表示"))
     }
     const approve_options = [...Array(5).keys()].map(m => `${5 - m}`)
     const initial_value = '' + (email?.approval_border ?? "3")
@@ -611,12 +644,13 @@ export const createBlocksEx = (event_names: string[], event_filter_columns: stri
  * @param email データベース上の値。すでに登録済みの情報を編集する際に指定する
  * @param schedule_mode 送信日時モード
  * @param schedule 送信日時 10桁UNIXタイムスタンプ
+ * @param filter_mode 宛先グループカラム間の結合条件(再描画時の初期値)。未指定ならemailの値または'and'
  * @returns 
  */
-export const getSlackView = (trigger_id: string, view_id: string | null = null, event_names: string[], selected_event_name: string | null = null, receipient_groups: ReceipientGroupMenuData[] | null = null, embeded_var_names: EmbededVarNames | null = null, email: Email | null = null, schedule_mode: boolean = false, schedule: number | null = null) => {
+export const getSlackView = (trigger_id: string, view_id: string | null = null, event_names: string[], selected_event_name: string | null = null, receipient_groups: ReceipientGroupMenuData[] | null = null, embeded_var_names: EmbededVarNames | null = null, email: Email | null = null, schedule_mode: boolean = false, schedule: number | null = null, filter_mode: FilterMode | null = null) => {
     // 総合的にslackに返却するblock kit データを作成する部分
 
-    const blocks = createBlocks(event_names, selected_event_name, receipient_groups, embeded_var_names, email, schedule_mode, schedule)
+    const blocks = createBlocks(event_names, selected_event_name, receipient_groups, embeded_var_names, email, schedule_mode, schedule, filter_mode)
     const dialog_title = email ? (email.email_id ? 'メール編集' : 'メール作成(コピー新規)') : 'メール作成'
     const view = {
         trigger_id,
@@ -703,9 +737,36 @@ export const getSlackViewEx = (trigger_id: string, view_id: string | null = null
  * @param trigger_id 
  * @param subject 埋込みパース済みのテキストを指定すること
  * @param body 埋込みパース済みのテキストを指定すること
+ * @param target_info プレビュー対象レコードの情報。
+ *   宛先文字列: 検索条件に一致するレコードの宛先を表示 / null: 条件に一致するレコードなしを示す / undefined: 情報なし(表示しない)
  */
-export const getSlackPreviewView = (trigger_id: string, subject: string, body: string) => {
+export const getSlackPreviewView = (trigger_id: string, subject: string, body: string, target_info?: string | null) => {
     const _subject = subject ? `*${subject}*` : ''
+    const blocks: any[] = []
+    if (target_info === null) {
+        blocks.push({
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: "検索条件に一致するレコードがありません(題名と本文はそのまま表示されています)"
+            }
+        })
+    } else if (target_info !== undefined) {
+        blocks.push({
+            type: "section",
+            text: {
+                type: "mrkdwn",
+                text: `検索条件に一致するレコードの例: \`${target_info}\``
+            }
+        })
+    }
+    blocks.push({
+        type: "section",
+        text: {
+            type: "mrkdwn",
+            text: `${_subject}\n\n${body}`
+        }
+    })
     return {
         trigger_id,
         view: {
@@ -715,11 +776,33 @@ export const getSlackPreviewView = (trigger_id: string, subject: string, body: s
                 type: "plain_text",
                 text: "メールプレビュー"
             },
+            blocks
+        }
+    }
+}
+
+/**
+ * 送信対象件数のプレビューを表示する
+ * @param trigger_id 
+ * @param count 送信対象件数(distinct email_addr)
+ * @param filter_mode 条件(AND/OR)
+ * @returns 
+ */
+export const getSlackCountView = (trigger_id: string, count: number, filter_mode: FilterMode | null = null) => {
+    return {
+        trigger_id,
+        view: {
+            type: "modal",
+            callback_id: "count_modal",
+            title: {
+                type: "plain_text",
+                text: "送信対象件数"
+            },
             blocks: [{
                 type: "section",
                 text: {
                     type: "mrkdwn",
-                    text: `${_subject}\n\n${body}`
+                    text: `現在の条件での送信対象件数: *${count}* 人\n条件: ${filterModeLabel(filter_mode)}`
                 }
             }]
         }
@@ -1027,7 +1110,12 @@ const createReceipientsField = (email: Email) => {
                     type: "mrkdwn",
                     text: `*対象 ${m}*: ${filters[m].join(', ')}`
                 }
-            })
+            }).concat([
+                {
+                    type: "mrkdwn",
+                    text: `*条件*: ${filterModeLabel(email.filter_mode)}`
+                }
+            ])
         }
     } else {
         return null
@@ -1037,9 +1125,10 @@ const createReceipientsField = (email: Email) => {
 /**
  * メール保存後にチャットとして投稿するメッセージ
  * @param email 
+ * @param target_count 現在の送信対象件数(保存・確認時などに計算して渡す)。未指定なら表示しない
  * @returns 
  */
-export const getSlackChatMessage = (email: Email) => {
+export const getSlackChatMessage = (email: Email, target_count: number | null = null) => {
 
     const blocks = []
     blocks.push(createMailTitle(email))
@@ -1049,6 +1138,16 @@ export const getSlackChatMessage = (email: Email) => {
     const receipients = createReceipientsField(email)
     if (receipients) {
         blocks.push(receipients)
+    }
+    if (target_count != null) {
+        blocks.push({
+            type: "section",
+            block_id: "target_count",
+            text: {
+                type: "mrkdwn",
+                text: `*対象人数*: ${target_count}人`
+            }
+        })
     }
 
     // "pending / approved / sending / expanded / sent / aborted"

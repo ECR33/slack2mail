@@ -435,6 +435,7 @@ export const resolveEmailTargets = async (
             p_email_id: email.email_id,
             p_event_name: email.event_name,
             p_filter: email.event_filter,
+            p_filter_mode: email.filter_mode ?? 'and',
         })
         if (error) throw error
         const result = data as { claimed: boolean }
@@ -481,6 +482,7 @@ export const expandEmailTargets = async (email: Email, supabase: SupabaseClient)
             p_email_id: email.email_id,
             p_event_name: email.event_name,
             p_filter: email.event_filter,
+            p_filter_mode: email.filter_mode ?? 'and',
         })
         if (error) throw error
         result = data as { claimed: boolean, targets: [] }

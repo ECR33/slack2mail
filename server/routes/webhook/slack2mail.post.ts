@@ -6,8 +6,8 @@
  * 
  */
 import { WebClient } from '@slack/web-api'
-import { checkSlackSignature, getMetaData, getSlackView, getSlackViewValues, getSlackPreviewView, setMetaData, getSlackOauthTokenByTeamId } from '#shared/utils/slack'
-import { getEmail, getEmailByTs, getReceipientGroupMenuData, getEmbededVarNames, saveEmail, getSampleEventData } from '#shared/utils/supabase'
+import { checkSlackSignature, getMetaData, getSlackView, getSlackViewValues, getSlackPreviewView, getSlackCountView, setMetaData, getSlackOauthTokenByTeamId, getEvetnFilter, type FilterMode } from '#shared/utils/slack'
+import { getEmail, getEmailByTs, getReceipientGroupMenuData, getEmbededVarNames, saveEmail, getSampleEventData, getTargetCount } from '#shared/utils/supabase'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import { DateTime } from 'luxon'
 import type { Database } from '~/types/database.types'
@@ -93,6 +93,13 @@ export default defineEventHandler(async (event) => {
             let selected_event_name = params.selected_event_name ?? ""
             let schedule_mode = params.schedule_mode ?? false
             let schedule = params.schedule ?? null
+            let filter_mode: FilterMode = params.filter_mode ?? 'and'
+
+            // 宛先選択条件(AND/OR)のUI上の現在値。view再描画時の初期値に使う
+            const filterModeFromState = (payload: any): FilterMode | null => {
+                const v = payload.view?.state?.values?.filter_mode?.select_action?.selected_option?.value
+                return v == 'or' ? 'or' : v == 'and' ? 'and' : null
+            }
 
 
             if (payload.type == "block_suggestion") {
@@ -113,26 +120,46 @@ export default defineEventHandler(async (event) => {
                     const receipient_groups = await getReceipientGroupMenuData(tenant_id, selected_event_name, supabase)
                     const embeded_var_names = await getEmbededVarNames(tenant_id, selected_event_name, supabase)
                     const event_names = await getEventNames(tenant_id, supabase)
-                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode, schedule)
-                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule })
+                    filter_mode = filterModeFromState(payload) ?? filter_mode
+                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode, schedule, filter_mode)
+                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule, filter_mode })
                     const result = await web.views.update(view)
                 } else if (block_id == 'preview') {
-                    // previewボタン押下
+                    // previewボタン押下(宛先選択条件に一致するレコードで件名・本文をプレビュー)
                     const subject = payload.view.state.values.subject.input_action.value ?? ""
                     const body = payload.view.state.values.body.input_action.value ?? ""
                     const event_name = payload.view.state.values.event_name.select_action.selected_option?.value ?? ""
 
-                    const eventData = await getSampleEventData(tenant_id, event_name, supabase)
-                    let _subject
-                    let _body
-                    if (eventData) {
-                        _subject = parseEmbeded(subject, eventData.embeded_values)
-                        _body = parseEmbeded(body, eventData.embeded_values)
-                    } else {
-                        _subject = subject
-                        _body = body
+                    let _subject = subject
+                    let _body = body
+                    let target_info: string | null | undefined = undefined
+                    if (event_name) {
+                        const filters = getEvetnFilter(payload.view.state.values)
+                        const mode = filterModeFromState(payload) ?? filter_mode
+                        const eventData = await getSampleEventData(tenant_id, event_name, filters, mode, supabase)
+                        if (eventData) {
+                            target_info = eventData.email_addr ?? null
+                            _subject = parseEmbeded(subject, eventData.embeded_values ?? {})
+                            _body = parseEmbeded(body, eventData.embeded_values ?? {})
+                        } else {
+                            target_info = null
+                        }
                     }
-                    view = getSlackPreviewView(payload.trigger_id, _subject, _body)
+                    view = getSlackPreviewView(payload.trigger_id, _subject, _body, target_info)
+                    // cast to any to satisfy ViewsPushArguments type requirements
+                    const result = await web.views.push(view as any)
+
+                } else if (block_id == 'count_targets') {
+                    // 送信対象件数プレビュー(展開・claimしないカウントのみ)
+                    const event_name = payload.view.state.values.event_name?.select_action?.selected_option?.value ?? ""
+                    if (!event_name) {
+                        view = getSlackPreviewView(payload.trigger_id, "", "イベントを選択してください")
+                    } else {
+                        const filters = getEvetnFilter(payload.view.state.values)
+                        const mode = filterModeFromState(payload) ?? filter_mode
+                        const count = await getTargetCount(tenant_id, event_name, filters, mode, supabase)
+                        view = getSlackCountView(payload.trigger_id, count, mode)
+                    }
                     // cast to any to satisfy ViewsPushArguments type requirements
                     const result = await web.views.push(view as any)
 
@@ -153,8 +180,9 @@ export default defineEventHandler(async (event) => {
                         }
                         const receipient_groups = await getReceipientGroupMenuData(tenant_id, selected_event_name, supabase)
                         const embeded_var_names = await getEmbededVarNames(tenant_id, selected_event_name, supabase)
-                        const _view = getSlackView(payload.trigger_id, null, event_names, selected_event_name, receipient_groups, embeded_var_names, email, schedule_mode, schedule)
-                        view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule })
+                        filter_mode = email.filter_mode ?? 'and'
+                        const _view = getSlackView(payload.trigger_id, null, event_names, selected_event_name, receipient_groups, embeded_var_names, email, schedule_mode, schedule, filter_mode)
+                        view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule, filter_mode })
                         const result = await web.views.open(view)
                     } else if (action_id == 'abort') {
                         // 中止ボタン押下
@@ -166,7 +194,8 @@ export default defineEventHandler(async (event) => {
                         email.approval_count = 0
                         email.approved_by = []
                         await saveEmail(email, supabase)
-                        const content = getSlackChatMessage(email)
+                        const targetCount = await getTargetCount(tenant_id, email.event_name ?? '', email.event_filter, email.filter_mode ?? 'and', supabase)
+                        const content = getSlackChatMessage(email, targetCount)
                         const result = await web.chat.update(content)
                     } else if (action_id == 'approve') {
                         // 確認ボタン押下
@@ -209,16 +238,18 @@ export default defineEventHandler(async (event) => {
                     const receipient_groups = await getReceipientGroupMenuData(tenant_id, selected_event_name, supabase)
                     const embeded_var_names = await getEmbededVarNames(tenant_id, selected_event_name, supabase)
                     const event_names = await getEventNames(tenant_id, supabase)
-                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode)
-                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule })
+                    filter_mode = filterModeFromState(payload) ?? filter_mode
+                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode, null, filter_mode)
+                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule, filter_mode })
                     const result = await web.views.update(view)
                 } else if (block_id == 'schedule_pick') {
                     schedule = actions[0].selected_date_time
                     const receipient_groups = await getReceipientGroupMenuData(tenant_id, selected_event_name, supabase)
                     const embeded_var_names = await getEmbededVarNames(tenant_id, selected_event_name, supabase)
                     const event_names = await getEventNames(tenant_id, supabase)
-                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode)
-                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule })
+                    filter_mode = filterModeFromState(payload) ?? filter_mode
+                    const _view = getSlackView(payload.trigger_id, payload.view.id, event_names, selected_event_name, receipient_groups, embeded_var_names, null, schedule_mode, null, filter_mode)
+                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule, filter_mode })
                     const result = await web.views.update(view)
                 } else {
                     console.error('未対応のblock', block_id)
@@ -234,7 +265,8 @@ export default defineEventHandler(async (event) => {
                     mail.schedule = null
                 }
                 const db_email = await saveEmail(mail, supabase)
-                const content = getSlackChatMessage(db_email)
+                const targetCount = await getTargetCount(tenant_id, db_email.event_name ?? '', db_email.event_filter, db_email.filter_mode ?? 'and', supabase)
+                const content = getSlackChatMessage(db_email, targetCount)
                 console.info('content', JSON.stringify(content,null,2))
                 if (db_email.approval_thread_ts) {
                     // 修正
@@ -278,7 +310,8 @@ export default defineEventHandler(async (event) => {
                     const _view = getSlackView(trigger_id, view_id, event_names, selected_event_name, receipient_groups, embeded_var_names, email)
                     schedule_mode = false
                     schedule = null
-                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule })
+                    filter_mode = email.filter_mode ?? 'and'
+                    view = setMetaData(_view, { channel_id, email_id, selected_event_name, schedule_mode, schedule, filter_mode })
                     const result = await web.views.open(view)
                 } else {
                     console.error('未対応のpayload.callback_id', payload.type, payload.callback_id)
