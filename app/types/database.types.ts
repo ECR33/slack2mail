@@ -743,7 +743,13 @@ export type Database = {
         Returns: boolean
       }
       link_my_tenant_user: { Args: never; Returns: undefined }
-      randomize_emails: { Args: never; Returns: undefined }
+      randomize_emails: {
+        Args: { p_event_names?: string[] | null; p_tenant_id: string }
+        Returns: {
+          changed: number
+          event_name: string
+        }[]
+      }
       sync_event_configs: {
         Args: { p_configs: Json; p_tenant_id: string }
         Returns: {

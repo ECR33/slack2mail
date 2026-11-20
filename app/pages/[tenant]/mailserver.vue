@@ -147,10 +147,10 @@
         </v-col>
     </v-row>
     <v-row class="align-center">
-        <v-col cols="auto">
-            <v-btn @click="mailRandomize" color="secondary">メールアドレスダミー化</v-btn>
+        <v-col cols="12" sm="auto">
+            <v-btn @click="mailRandomize" color="warning" variant="outlined" :loading="randomizing">メールアドレスダミー化</v-btn>
         </v-col>
-        <v-col>宛先(イベント参加者)メールアドレスをダミーに置き換えます</v-col>
+        <v-col cols="12" class="text-caption">このテナントの全イベントの宛先(イベント参加者)メールアドレスを無効な値に置き換えます(戻すには「イベントシート読込み」)</v-col>
     </v-row>
     <v-snackbar-queue ref="snackbarQueue" v-model="snackbarMessages" :total-visible="5" closable></v-snackbar-queue>
 </template>
@@ -172,6 +172,9 @@ const snackbarQueue = ref()
 const snackbarMessages = ref<{ text: string, color: string }[]>([])
 
 const supabase = useSupabaseClient()
+const currentTenant = useCurrentTenant()
+const tenantId = currentTenant.value?.tenant_id || ''
+const randomizing = ref(false)
 
 const serverConfigs = ref<MailServerConfig[]>([])
 const _serverConfig = ref(<MailServerConfig>{})
@@ -282,17 +285,28 @@ const onDeleteA = async (id: string) => {
 
 
 const mailRandomize = async () => {
-    const result = confirm('メールアドレスをダミー化します。よろしいですか？')
+    if (!tenantId) {
+        addMessage('error', 'テナントを特定できないため実行できません')
+        return
+    }
+    const result = confirm('メールアドレスをダミー化します。\nこのテナントの全イベントのメールアドレスがすべて無効な値に置き換わります。よろしいですか？')
     if (!result) {
         addMessage('info', 'キャンセルしました')
         return
     }
-    const { error } = await supabase.rpc('randomize_emails')
+    randomizing.value = true
+    const { data, error } = await supabase.rpc('randomize_emails', { p_tenant_id: tenantId, p_event_names: null })
+    randomizing.value = false
     if (error) {
         console.error('mailRondomize: error', error)
-        addMessage('error', 'メールアドレスダミー化に失敗しました')
+        addMessage('error', 'メールアドレスダミー化に失敗しました: ' + error.message)
     } else {
-        addMessage('success', 'メールアドスレをダミー化しました')
+        const rows = data ?? []
+        const total = rows.reduce((sum, r) => sum + (r.changed ?? 0), 0)
+        addMessage('success', `メールアドレスをダミー化しました(${total}件)`)
+        for (const r of rows) {
+            addMessage('info', `${r.event_name}: ${r.changed}件`)
+        }
     }
 }
 

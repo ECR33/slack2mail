@@ -4,6 +4,7 @@ import { sh2json } from '/shared/utils/index.ts'
 import { readEvent, getSlack2mailConfig } from '/shared/utils/index.ts'
 import { __test__ } from '/shared/utils/index.ts'
 import { parseEmbeded } from '../../shared/utils'
+import { selectEventConfigs } from '../../shared/utils'
 
 describe('スプレッドシート変換テスト', () => {
     it('2次元配列がJsonへ変換されること', () => {
@@ -212,5 +213,40 @@ describe('埋め込み文字列パース', () => {
         const _parsed = "(((氏名 ))) 様 あなたの番号は2025-001です。"
         const parsed = parseEmbeded(body, vars)
         expect(parsed).toEqual(_parsed)
+    })
+})
+
+describe('イベントシート読込み対象の絞り込み', () => {
+    const configs = [
+        { event_name: '春のイベント', sheet_id: 'aaa' },
+        { event_name: '秋のイベント', sheet_id: 'bbb' },
+        { event_name: '冬のイベント', sheet_id: 'ccc' },
+    ] as any[]
+
+    it('イベント名を指定するとそのイベントのみが対象になる', () => {
+        const { targets, requestedAll, notFound } = selectEventConfigs(configs, ['秋のイベント'])
+        expect(requestedAll).toBe(false)
+        expect(targets.map(c => c.event_name)).toEqual(['秋のイベント'])
+        expect(notFound).toEqual([])
+    })
+    it('複数のイベント名指定では指定した順に重複なく対象になる', () => {
+        const { targets, requestedAll } = selectEventConfigs(configs, ['冬のイベント', '春のイベント', '春のイベント'])
+        expect(requestedAll).toBe(false)
+        expect(targets.map(c => c.event_name)).toEqual(['春のイベント', '冬のイベント'])
+    })
+    it('指定が空(未選択)の場合は全イベントが対象になる', () => {
+        expect(selectEventConfigs(configs, []).requestedAll).toBe(true)
+        expect(selectEventConfigs(configs, undefined).requestedAll).toBe(true)
+        expect(selectEventConfigs(configs, null).targets.length).toBe(3)
+    })
+    it('イベント設定に無い名前はnotFoundに返る', () => {
+        const { targets, notFound } = selectEventConfigs(configs, ['存在しないイベント', '秋のイベント'])
+        expect(targets.map(c => c.event_name)).toEqual(['秋のイベント'])
+        expect(notFound).toEqual(['存在しないイベント'])
+    })
+    it('空文字や空白の指定は対象として扱わない', () => {
+        const { targets, requestedAll } = selectEventConfigs(configs, ['', '   '])
+        expect(requestedAll).toBe(false)
+        expect(targets.length).toBe(0)
     })
 })

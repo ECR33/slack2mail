@@ -71,3 +71,20 @@ export type Email = Database['public']['Tables']['emails']['Row']
 
 // Slack Workspace
 export type SlackWorkspace = Database['public']['Tables']['slack_workspaces']['Row']
+
+// /api/sync-eventdata のイベント単位の読込み結果
+export type SyncEventDataResult = {
+    event_name: string
+    status: 'synced' | 'skipped' | 'error'
+    rows: number
+    message?: string
+}
+
+// /api/sync-eventdata のレスポンス
+export type SyncEventDataResponse = {
+    /** イベント名が指定されず全イベントを読み込んだかどうか */
+    requestedAll: boolean
+    /** 指定されたがイベント設定が見つらなかったイベント名 */
+    notFound: string[]
+    results: SyncEventDataResult[]
+}

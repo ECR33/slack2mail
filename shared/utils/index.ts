@@ -260,6 +260,25 @@ export const readEvent = async (eventConfig: EventConfig, googleSpreadsheetClien
 }
 
 
+/**
+ * イベントシート読込みの対象をイベント単位で絞り込む
+ * @param eventConfigs テナントのイベント設定一覧
+ * @param requestedNames 読込み対象として指定されたイベント名(省略・空配列なら全イベント)
+ * @returns targets: 読込み対象の設定, requestedAll: 全イベント読込みか, notFound: 設定が見つからないイベント名
+ */
+export const selectEventConfigs = (eventConfigs: EventConfig[], requestedNames?: unknown) => {
+    const names = Array.isArray(requestedNames)
+        ? [...new Set(requestedNames.map(n => String(n)).filter(n => n !== ''))]
+        : []
+    const requestedAll = names.length === 0
+    return {
+        targets: requestedAll ? eventConfigs : eventConfigs.filter(c => names.includes(c.event_name)),
+        requestedAll,
+        notFound: requestedAll ? [] : names.filter(n => !eventConfigs.some(c => c.event_name === n))
+    }
+}
+
+
 
 // メンバーリストシート用
 
