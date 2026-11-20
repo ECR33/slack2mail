@@ -65,6 +65,11 @@ describe('イベント設定一覧のレスポンシブ表示', () => {
         expect(wrapper.find('table').exists()).toBe(true)
         expect(wrapper.findAll('.v-card').length).toBe(0)
         expect(wrapper.findAll('tbody tr').length).toBe(2)
+        // 読込みボタンはダウンロードと混同しないmdi-importを使う
+        const loadIcons = wrapper.findAll('tbody tr button i')
+        expect(loadIcons.length).toBe(2)
+        expect(loadIcons.map(i => i.classes()).every(c => c.includes('mdi-import'))).toBe(true)
+        expect(wrapper.find('.mdi-download').exists()).toBe(false)
     })
 
     it('カードの読込みボタンが押されるとイベント名をemitする', async () => {
@@ -73,6 +78,7 @@ describe('イベント設定一覧のレスポンシブ表示', () => {
         expect(loadButtons.length).toBe(2)
         expect(loadButtons[0].attributes('disabled')).toBeUndefined()
         expect(loadButtons[1].attributes('disabled')).toBeDefined()
+        expect(loadButtons[0].find('i').classes()).toContain('mdi-import')
         await loadButtons[0].trigger('click')
         expect(wrapper.emitted('load')?.[0]).toEqual(['春のイベント'])
     })

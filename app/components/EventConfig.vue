@@ -65,7 +65,7 @@
             </v-card-text>
 
             <v-card-actions>
-                <v-btn color="primary" variant="tonal" :disabled="!record.sheet_id"
+                <v-btn color="primary" variant="tonal" prepend-icon="mdi-import" :disabled="!record.sheet_id"
                     :loading="props.loadingEventName === record.event_name" @click="emit('load', record.event_name)">
                     このイベントのシート読込み
                 </v-btn>
@@ -109,7 +109,7 @@
                 <td>{{ record.sender_name }}</td>
                 <td>{{ record.sender_email_addr }}</td>
                 <td>
-                    <v-btn :icon="'mdi-download'" :disabled="!record.sheet_id"
+                    <v-btn :icon="'mdi-import'" :disabled="!record.sheet_id"
                         :loading="props.loadingEventName === record.event_name"
                         :aria-label="`${record.event_name}のシート読込み`"
                         :title="record.sheet_id ? 'このイベントのシート読込み' : 'シートIDが未設定です'" size="small"
