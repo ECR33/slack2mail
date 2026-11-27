@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { __slack_test__, getSlackViewValues, createExSelectOptions, getSlackView, getSlackViewEx } from '../../shared/utils/slack.js'
+import { __slack_test__, getSlackViewValues, createExSelectOptions, getSlackView, getSlackViewEx, getSlackChatMessage } from '../../shared/utils/slack.js'
 import { DateTime } from 'luxon'
+import type { Email } from '../../shared/types/index.js'
 
 describe('slackユーディリティのテスト', () => {
     const values = {
@@ -1064,5 +1065,96 @@ describe('slackユーディリティのテスト', () => {
         const selected_value = '会員一覧_2025'
         const view = getSlackView(trigger_id, null, _event_names, selected_value)
         expect(view).toEqual(static_select_view)
+    })
+})
+
+describe('getSlackChatMessageの確認者表示', () => {
+    const baseEmail = (overrides: Partial<Email>): Email => ({
+        aborted_at: null,
+        aborted_by: null,
+        approval_border: 3,
+        approval_channel: 'C0000000001',
+        approval_count: 0,
+        approval_thread_ts: '0000000000.000000',
+        approved_by: null,
+        attachments: null,
+        body: '本文',
+        created_at: '2026-11-27T10:00:00.000Z',
+        created_by: 'U0000000001',
+        edited_at: null,
+        edited_by: null,
+        email_id: 'e0000000001',
+        event_filter: null,
+        event_name: 'event1',
+        filter_mode: 'and',
+        mail_account_id: null,
+        mail_account_name: null,
+        num_of_received: 0,
+        num_of_sent: 0,
+        num_of_target: 0,
+        schedule: null,
+        sent_at: null,
+        status: 'pending',
+        subject: '件名',
+        team_id: 'T0000000001',
+        tenant_id: 'tenant1',
+        ...overrides
+    })
+    const findConfirmersBlock = (content: ReturnType<typeof getSlackChatMessage>) =>
+        (content.blocks as Array<{ block_id?: string; text?: { text?: string } }>)
+            .find(b => b.block_id === 'confirmers')
+
+    it('pending・未確認では確認者ブロックを表示しない', () => {
+        const content = getSlackChatMessage(baseEmail({ status: 'pending' }))
+        expect(findConfirmersBlock(content)).toBeUndefined()
+    })
+
+    it('pending・部分確認では確認者を表示する', () => {
+        const email = baseEmail({
+            status: 'pending',
+            approval_count: 1,
+            approval_border: 3,
+            approved_by: ['U0000000002']
+        })
+        const content = getSlackChatMessage(email)
+        const block = findConfirmersBlock(content)
+        expect(block?.text?.text).toContain(':white_check_mark:確認者(1/3)')
+        expect(block?.text?.text).toContain('<@U0000000002>')
+    })
+
+    it('approvedでは全確認者を表示する', () => {
+        const email = baseEmail({
+            status: 'approved',
+            approval_count: 3,
+            approval_border: 3,
+            approved_by: ['U0000000002', 'U0000000003', 'U0000000004']
+        })
+        const content = getSlackChatMessage(email)
+        const block = findConfirmersBlock(content)
+        expect(block?.text?.text).toContain('確認者(3/3)')
+        expect(block?.text?.text).toContain('<@U0000000002>')
+        expect(block?.text?.text).toContain('<@U0000000003>')
+        expect(block?.text?.text).toContain('<@U0000000004>')
+    })
+
+    it('sendingでも確認者を表示する', () => {
+        const email = baseEmail({
+            status: 'sending',
+            approval_count: 3,
+            approval_border: 3,
+            approved_by: ['U0000000002', 'U0000000003', 'U0000000004']
+        })
+        const content = getSlackChatMessage(email)
+        expect(findConfirmersBlock(content)?.text?.text).toContain('<@U0000000002>')
+    })
+
+    it('abortedでは確認者を表示しない(中止でapproved_byはクリアされる)', () => {
+        const email = baseEmail({
+            status: 'aborted',
+            approval_count: 0,
+            approved_by: []
+        })
+        const content = getSlackChatMessage(email)
+        expect(findConfirmersBlock(content)).toBeUndefined()
     })
 })

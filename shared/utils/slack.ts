@@ -907,6 +907,27 @@ const createApprovedMessage = (email: Email) => {
 }
 
 /**
+ * 確認ボタンを押した人(確認者)を表示するメッセージ
+ * 確認者が0人の場合はnullを返す(表示しない)
+ * @param email
+ * @returns
+ */
+const createConfirmersMessage = (email: Email) => {
+    const confirmed = email.approved_by ?? []
+    if (confirmed.length === 0) {
+        return null
+    }
+    return {
+        type: "section",
+        block_id: "confirmers",
+        text: {
+            type: "mrkdwn",
+            text: `:white_check_mark:確認者(${email.approval_count}/${email.approval_border}): ${confirmed.map(u => `<@${u}>`).join(', ')}`,
+        }
+    }
+}
+
+/**
  * 編集された際に表示するメッセージ
  * @param email 
  * @returns 
@@ -1151,6 +1172,9 @@ export const getSlackChatMessage = (email: Email, target_count: number | null = 
         })
     }
 
+    // 確認者表示(pending時は部分的確認、approved/sending時は確定した確認者一覧)
+    const confirmers = createConfirmersMessage(email)
+
     // "pending / approved / sending / expanded / sent / aborted"
     switch (email.status) {
         case "pending":
@@ -1158,17 +1182,26 @@ export const getSlackChatMessage = (email: Email, target_count: number | null = 
             if (email.edited_by) {
                 blocks.push(createEditedMessage(email))
             }
+            if (confirmers) {
+                blocks.push(confirmers)
+            }
             // scheduleがnullでも「送信予定時刻: 未定」を表示し、日時が消えたことを目に見えるようにする
             blocks.push(createScheduleMessagae(email))
             blocks.push(createActions(email))
             break;
         case "approved":
             blocks.push(createApprovedMessage(email))
+            if (confirmers) {
+                blocks.push(confirmers)
+            }
             blocks.push(createScheduleMessagae(email))
             blocks.push(createActions(email))
             break;
         case "sending":
             blocks.push(createApprovedMessage(email))
+            if (confirmers) {
+                blocks.push(confirmers)
+            }
             blocks.push(createScheduleMessagae(email))
             break;
         case "expanded":
