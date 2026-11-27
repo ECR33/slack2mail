@@ -82,7 +82,7 @@ export default defineNuxtConfig({
       appUrl: "",
       supabaseUrl: "",
       supabaseKey: "",
-      version: "v2026.1120.0"
+      version: "v2026.1127.0"
     }
   },
   qrcode: {

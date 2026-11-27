@@ -937,7 +937,8 @@ const createAbortedMessage = (email: Email) => {
 }
 
 /**
- * 承認後、送信待ち状態に表示するメッセージ
+ * 送信予定時刻に表示するメッセージ(pending/approved/sending)。
+ * scheduleがnullの場合は「未定」を表示する。
  * @param email 
  * @returns 
  */
@@ -1157,9 +1158,8 @@ export const getSlackChatMessage = (email: Email, target_count: number | null = 
             if (email.edited_by) {
                 blocks.push(createEditedMessage(email))
             }
-            if (email.schedule) {
-                blocks.push(createScheduleMessagae(email))
-            }
+            // scheduleがnullでも「送信予定時刻: 未定」を表示し、日時が消えたことを目に見えるようにする
+            blocks.push(createScheduleMessagae(email))
             blocks.push(createActions(email))
             break;
         case "approved":
