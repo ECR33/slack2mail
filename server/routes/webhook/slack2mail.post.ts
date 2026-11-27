@@ -209,7 +209,9 @@ export default defineEventHandler(async (event) => {
                             email.approval_count = approved_by.length
                             if (email.approval_count >= email.approval_border) {
                                 email.status = 'approved'
-                                if (email.schedule && email.schedule < DateTime.now().plus({ minutes: 5 }).toISO()) {
+                                // ISO文字列(Z形式とローカルオフセット形式)を比較すると
+                                // タイムゾーンでズレるため、UNIX秒(インスタント)で比較する。
+                                if (email.schedule && DateTime.fromISO(email.schedule).toUnixInteger() < DateTime.now().plus({ minutes: 5 }).toUnixInteger()) {
                                     // 既にスケジユールがあり、現在時刻よりも5分以上未来の場合
                                     // 予定通りとし、日時を修正しない。
                                 } else {
